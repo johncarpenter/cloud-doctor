@@ -5,29 +5,29 @@ import (
 
 	"github.com/elC0mpa/aws-billing/model"
 	awscostexplorer "github.com/elC0mpa/aws-billing/service/costexplorer"
+	awsec2 "github.com/elC0mpa/aws-billing/service/ec2"
 	awssts "github.com/elC0mpa/aws-billing/service/sts"
 	"github.com/elC0mpa/aws-billing/utils"
 )
 
-func NewService(stsService awssts.STSService, costService awscostexplorer.CostService) *service {
+func NewService(stsService awssts.STSService, costService awscostexplorer.CostService, ec2Service awsec2.EC2Service) *service {
 	return &service{
 		stsService:  stsService,
 		costService: costService,
+		ec2Service:  ec2Service,
 	}
-
 }
 
 func (s *service) Orchestrate(flags model.Flags) error {
-	var err error
-
-	switch flags.Trend {
-	case false:
-		err = s.defaultWorkflow()
-	case true:
-		err = s.trendWorkflow()
+	if flags.Waste {
+		return s.wasteWorkflow()
 	}
 
-	return err
+	if flags.Trend {
+		return s.trendWorkflow()
+	}
+
+	return s.defaultWorkflow()
 }
 
 func (s *service) defaultWorkflow() error {
@@ -58,7 +58,7 @@ func (s *service) defaultWorkflow() error {
 
 	utils.StopSpinner()
 
-	utils.DrawTable(*stsResult.Account, *lastTotalCost, *currentTotalCost, lastMonthData, currentMonthData, "UnblendedCost")
+	utils.DrawCostTable(*stsResult.Account, *lastTotalCost, *currentTotalCost, lastMonthData, currentMonthData, "UnblendedCost")
 	return nil
 }
 
@@ -76,6 +76,39 @@ func (s *service) trendWorkflow() error {
 	utils.StopSpinner()
 
 	utils.DrawTrendChart(*stsResult.Account, costInfo)
+
+	return nil
+}
+
+func (s *service) wasteWorkflow() error {
+	elasticIpInfo, err := s.ec2Service.GetUnusedElasticIpAddressesInfo(context.Background())
+	if err != nil {
+		return err
+	}
+
+	availableEBSVolumesInfo, err := s.ec2Service.GetUnusedEBSVolumes(context.Background())
+	if err != nil {
+		return err
+	}
+
+	stoppedInstancesMoreThan30Days, attachedToStoppedInstancesEBSVolumesInfo, err := s.ec2Service.GetStoppedInstancesInfo(context.Background())
+	if err != nil {
+		return err
+	}
+
+	expireReservedInstancesInfo, err := s.ec2Service.GetReservedInstanceExpiringOrExpired30DaysWaste(context.Background())
+	if err != nil {
+		return err
+	}
+
+	stsResult, err := s.stsService.GetCallerIdentity(context.Background())
+	if err != nil {
+		return err
+	}
+
+	utils.StopSpinner()
+
+	utils.DrawWasteTable(*stsResult.Account, elasticIpInfo, availableEBSVolumesInfo, attachedToStoppedInstancesEBSVolumesInfo, expireReservedInstancesInfo, stoppedInstancesMoreThan30Days)
 
 	return nil
 }

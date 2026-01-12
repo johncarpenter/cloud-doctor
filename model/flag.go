@@ -4,4 +4,5 @@ type Flags struct {
 	Region  string
 	Profile string
 	Trend   bool
+	Waste   bool
 }
