@@ -25,7 +25,7 @@ var defaultStyle = lipgloss.NewStyle().
 	BorderForeground(lipgloss.Color("#F4D060"))
 
 func DrawTrendChart(accountId string, monthlyCosts []model.CostInfo) {
-	fmt.Printf("\n%s\n", text.FgHiWhite.Sprint(" 🏥  AWS DOCTOR TREND"))
+	fmt.Printf("\n%s\n", text.FgHiWhite.Sprint(" 📈 AWS DOCTOR TREND"))
 	fmt.Printf(" Account ID: %s\n", text.FgBlue.Sprint(accountId))
 	fmt.Println(text.FgHiBlue.Sprint(" ------------------------------------------------"))
 

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,20 +13,24 @@ import (
 )
 
 func DrawCostTable(accountId string, lastTotalCost, currenttotalCost string, lastMonthGroups, currentMonthGroups *model.CostInfo, costAggregation string) {
+	fmt.Printf("\n%s\n", text.FgHiWhite.Sprint(" 💰 AWS COST DIAGNOSIS"))
+	fmt.Printf(" Account ID: %s\n", text.FgBlue.Sprint(accountId))
+	fmt.Println(text.FgHiBlue.Sprint(" ------------------------------------------------"))
+
 	currentMonthHeader := fmt.Sprintf("Current Month\n(%s\n%s)", *currentMonthGroups.Start, *currentMonthGroups.End)
 	lastMonthHeader := fmt.Sprintf("Last Month\n(%s\n%s)", *lastMonthGroups.Start, *lastMonthGroups.End)
 
 	rowHeader := table.Row{
-		"Account ID",
 		"Service",
 		lastMonthHeader,
 		currentMonthHeader,
 		"Difference",
 	}
 
-	tw := table.Table{}
-
+	tw := table.NewWriter()
+	tw.SetOutputMirror(os.Stdout)
 	tw.AppendHeader(rowHeader)
+
 	var rows []table.Row
 
 	rows = append(rows, populateFirstRow(lastTotalCost, currenttotalCost))
@@ -36,34 +41,29 @@ func DrawCostTable(accountId string, lastTotalCost, currenttotalCost string, las
 		rows = append(rows, populateRow(*lastMonthGroups, group))
 	}
 
-	halfRow := len(rows) / 2
-	rows[halfRow][0] = text.FgBlue.Sprintf("%s", accountId)
 	tw.AppendRows(rows)
 	tw.SetStyle(table.StyleRounded)
+	
 	tw.SetColumnConfigs([]table.ColumnConfig{
 		{
 			Number:       1,
 			VAlignHeader: text.VAlignMiddle,
 		},
 		{
-			Number:       2,
-			VAlignHeader: text.VAlignMiddle,
+			Number: 2,
+			Align:  text.AlignRight,
 		},
 		{
 			Number: 3,
 			Align:  text.AlignRight,
 		},
 		{
-			Number: 4,
-			Align:  text.AlignRight,
-		},
-		{
-			Number:       5,
+			Number:       4,
 			Align:        text.AlignRight,
 			VAlignHeader: text.VAlignMiddle,
 		},
 	})
-	fmt.Println(tw.Render())
+	tw.Render()
 }
 
 func orderCostServices(costGroups *model.CostGroup) []model.ServiceCost {
@@ -99,24 +99,23 @@ func populateFirstRow(lastTotalCost, currentTotalCost string) table.Row {
 
 	difference := currentTotalAmount - lastTotalAmount
 
-	row := make(table.Row, 5)
-	row[0] = ""
-	row[1] = text.FgHiGreen.Sprint("Total Costs")
-	row[2] = text.FgHiYellow.Sprintf("%s", lastTotalCost)
-	row[3] = text.FgHiGreen.Sprintf("%s", currentTotalCost)
-	row[4] = text.FgHiGreen.Sprintf("%.2f %s", difference, currentTotalSplitted[1])
+	row := make(table.Row, 4)
+	row[0] = text.FgHiGreen.Sprint("Total Costs")
+	row[1] = text.FgHiYellow.Sprintf("%s", lastTotalCost)
+	row[2] = text.FgHiGreen.Sprintf("%s", currentTotalCost)
+	row[3] = text.FgHiGreen.Sprintf("%.2f %s", difference, currentTotalSplitted[1])
 
 	if difference > 0 {
-		row[3] = text.FgHiRed.Sprintf("%s", currentTotalCost)
-		row[1] = text.FgHiRed.Sprintf("Total Costs")
-		row[4] = text.FgHiRed.Sprintf("%.2f %s", difference, currentTotalSplitted[1])
+		row[2] = text.FgHiRed.Sprintf("%s", currentTotalCost)
+		row[0] = text.FgHiRed.Sprintf("Total Costs")
+		row[3] = text.FgHiRed.Sprintf("%.2f %s", difference, currentTotalSplitted[1])
 	}
 
 	return row
 }
 
 func populateRow(lastMonthGroups model.CostInfo, currentMonthGroup model.ServiceCost) table.Row {
-	row := make(table.Row, 5)
+	row := make(table.Row, 4)
 
 	serviceName := currentMonthGroup.Name
 	lastMonthGroup := lastMonthGroups.CostGroup[serviceName]
@@ -126,16 +125,15 @@ func populateRow(lastMonthGroups model.CostInfo, currentMonthGroup model.Service
 
 	difference := currentMonthGroup.Amount - lastMonthGroup.Amount
 
-	row[0] = ""
-	row[1] = text.FgGreen.Sprintf("%s", serviceName)
-	row[2] = text.FgYellow.Sprintf("%s", lastServiceCost)
-	row[3] = text.FgGreen.Sprintf("%s", currentServiceCost)
-	row[4] = text.FgGreen.Sprintf("%.2f %s", difference, currentMonthGroup.Unit)
+	row[0] = text.FgGreen.Sprintf("%s", serviceName)
+	row[1] = text.FgYellow.Sprintf("%s", lastServiceCost)
+	row[2] = text.FgGreen.Sprintf("%s", currentServiceCost)
+	row[3] = text.FgGreen.Sprintf("%.2f %s", difference, currentMonthGroup.Unit)
 
 	if difference > 0 {
-		row[1] = text.FgRed.Sprintf("%s", serviceName)
-		row[3] = text.FgRed.Sprintf("%s", currentServiceCost)
-		row[4] = text.FgRed.Sprintf("%.2f %s", difference, currentMonthGroup.Unit)
+		row[0] = text.FgRed.Sprintf("%s", serviceName)
+		row[2] = text.FgRed.Sprintf("%s", currentServiceCost)
+		row[3] = text.FgRed.Sprintf("%.2f %s", difference, currentMonthGroup.Unit)
 	}
 
 	return row
