@@ -25,6 +25,10 @@ var defaultStyle = lipgloss.NewStyle().
 	BorderForeground(lipgloss.Color("#F4D060"))
 
 func DrawTrendChart(accountId string, monthlyCosts []model.CostInfo) {
+	fmt.Printf("\n%s\n", text.FgHiWhite.Sprint(" 🏥  AWS DOCTOR TREND"))
+	fmt.Printf(" Account ID: %s\n", text.FgBlue.Sprint(accountId))
+	fmt.Println(text.FgHiBlue.Sprint(" ------------------------------------------------"))
+
 	bc := barchart.New(130, 20)
 
 	indexedColors := assignRankedColors(monthlyCosts)
@@ -47,8 +51,7 @@ func DrawTrendChart(accountId string, monthlyCosts []model.CostInfo) {
 	fmt.Println()
 
 	bc.Draw()
-	s := text.FgYellow.Sprintf("Trend analysis for account %s\n", accountId)
-	s += lipgloss.JoinHorizontal(lipgloss.Top,
+	s := lipgloss.JoinHorizontal(lipgloss.Top,
 		defaultStyle.Render(bc.View()),
 	)
 
