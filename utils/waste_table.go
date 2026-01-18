@@ -12,6 +12,22 @@ import (
 )
 
 func DrawWasteTable(accountId string, elasticIpInfo []types.Address, unusedEBSVolumeInfo []types.Volume, attachedToStoppedInstancesEBSVolumeInfo []types.Volume, expireReservedInstancesInfo []model.RiExpirationInfo, instancesStoppedMoreThan30Days []types.Instance) {
+	fmt.Printf("\n%s\n", text.FgHiWhite.Sprint(" 🏥  AWS DOCTOR CHECKUP"))
+	fmt.Printf(" Account ID: %s\n", text.FgBlue.Sprint(accountId))
+	fmt.Println(text.FgHiBlue.Sprint(" ------------------------------------------------"))
+
+	hasWaste := len(elasticIpInfo) > 0 ||
+		len(unusedEBSVolumeInfo) > 0 ||
+		len(attachedToStoppedInstancesEBSVolumeInfo) > 0 ||
+		len(instancesStoppedMoreThan30Days) > 0 ||
+		len(expireReservedInstancesInfo) > 0
+
+	if !hasWaste {
+		fmt.Println("\n" + text.FgHiGreen.Sprint(" ✅  Your account is healthy! No waste found."))
+		return
+	}
+
+	// --- Existing Logic ---
 	if len(unusedEBSVolumeInfo) > 0 || len(attachedToStoppedInstancesEBSVolumeInfo) > 0 {
 		drawEBSTable(unusedEBSVolumeInfo, attachedToStoppedInstancesEBSVolumeInfo)
 	}
@@ -29,7 +45,7 @@ func drawEBSTable(unusedEBSVolumeInfo []types.Volume, attachedToStoppedInstances
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetStyle(table.StyleRounded)
-	t.SetTitle("🗑EBS Volume Waste")
+	t.SetTitle("EBS Volume Waste")
 
 	t.AppendHeader(table.Row{"Status", "Volume ID", "Size (GiB)"})
 
@@ -72,7 +88,7 @@ func drawEC2Table(instances []types.Instance, ris []model.RiExpirationInfo) {
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetStyle(table.StyleRounded)
-	t.SetTitle("🗑EC2 & Reserved Instance Waste")
+	t.SetTitle("EC2 & Reserved Instance Waste")
 
 	t.AppendHeader(table.Row{"Status", "Instance ID", "Time Info"})
 
@@ -144,7 +160,7 @@ func drawElasticIpTable(elasticIpInfo []types.Address) {
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetStyle(table.StyleRounded)
-	t.SetTitle("🗑Elastic IP Waste")
+	t.SetTitle("Elastic IP Waste")
 
 	t.AppendHeader(table.Row{"Status", "IP Address", "Allocation ID"})
 
