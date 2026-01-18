@@ -2,7 +2,6 @@ package awscostexplorer
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/elC0mpa/aws-billing/model"
+	"github.com/elC0mpa/aws-billing/utils"
 )
 
 func NewService(awsconfig aws.Config) *service {
@@ -99,7 +99,7 @@ func (s *service) GetUnusedEBSVolumes(ctx context.Context) ([]types.Volume, erro
 	return output.Volumes, nil
 }
 
-func (s *service) GetStoppedInstancesInfo(ctx context.Context) ([]types.Instance, []string, error) {
+func (s *service) GetStoppedInstancesInfo(ctx context.Context) ([]types.Instance, []types.Volume, error) {
 	input := &ec2.DescribeInstancesInput{
 		Filters: []types.Filter{
 			{
@@ -114,7 +114,7 @@ func (s *service) GetStoppedInstancesInfo(ctx context.Context) ([]types.Instance
 		return nil, nil, err
 	}
 
-	var stoppedInstanceVolumes []string
+	var stoppedInstanceVolumeIDs []string
 	var stoppedInstanceForMoreThan30Days []types.Instance
 
 	thresholdTime := time.Now().Add(-30 * 24 * time.Hour)
@@ -123,11 +123,11 @@ func (s *service) GetStoppedInstancesInfo(ctx context.Context) ([]types.Instance
 		for _, instance := range reservation.Instances {
 			for _, mapping := range instance.BlockDeviceMappings {
 				if mapping.Ebs != nil {
-					stoppedInstanceVolumes = append(stoppedInstanceVolumes, aws.ToString(mapping.Ebs.VolumeId))
+					stoppedInstanceVolumeIDs = append(stoppedInstanceVolumeIDs, aws.ToString(mapping.Ebs.VolumeId))
 				}
 			}
 			reason := aws.ToString(instance.StateTransitionReason)
-			stoppedAt, err := parseTransitionDate(reason)
+			stoppedAt, err := utils.ParseTransitionDate(reason)
 			if err != nil {
 				continue
 			}
@@ -136,6 +136,19 @@ func (s *service) GetStoppedInstancesInfo(ctx context.Context) ([]types.Instance
 				stoppedInstanceForMoreThan30Days = append(stoppedInstanceForMoreThan30Days, instance)
 			}
 		}
+	}
+
+	var stoppedInstanceVolumes []types.Volume
+
+	if len(stoppedInstanceVolumeIDs) > 0 {
+		outputEBS, err := s.client.DescribeVolumes(ctx, &ec2.DescribeVolumesInput{
+			VolumeIds: stoppedInstanceVolumeIDs,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+
+		stoppedInstanceVolumes = outputEBS.Volumes
 	}
 
 	return stoppedInstanceForMoreThan30Days, stoppedInstanceVolumes, nil
@@ -256,16 +269,4 @@ func (s *service) getResourceTypeFromDescription(description string) types.Netwo
 	}
 
 	return types.NetworkInterfaceType("interface")
-}
-
-func parseTransitionDate(reason string) (time.Time, error) {
-	matches := transitionReasonRegex.FindStringSubmatch(reason)
-	if len(matches) < 2 {
-		return time.Time{}, fmt.Errorf("no date found in string: %s", reason)
-	}
-
-	dateStr := matches[1]
-
-	layout := "2006-01-02 15:04:05 MST"
-	return time.Parse(layout, dateStr)
 }
