@@ -3,6 +3,6 @@ package utils
 import "github.com/common-nighthawk/go-figure"
 
 func DrawBanner() {
-	myFigure := figure.NewColorFigure("AWS Doctor", "isometric3", "yellow", false)
+	myFigure := figure.NewColorFigure("Cloud Doctor", "isometric3", "cyan", false)
 	myFigure.Print()
 }

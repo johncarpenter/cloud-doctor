@@ -3,49 +3,46 @@ package utils
 import (
 	"fmt"
 	"os"
-	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/elC0mpa/aws-doctor/model"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
 )
 
-func DrawWasteTable(accountId string, elasticIpInfo []types.Address, unusedEBSVolumeInfo []types.Volume, attachedToStoppedInstancesEBSVolumeInfo []types.Volume, expireReservedInstancesInfo []model.RiExpirationInfo, instancesStoppedMoreThan30Days []types.Instance) {
-	fmt.Printf("\n%s\n", text.FgHiWhite.Sprint(" 🏥 AWS DOCTOR CHECKUP"))
+func DrawWasteTable(accountId string, unusedIPs []model.UnusedIP, unusedVolumes []model.UnusedVolume, attachedToStoppedVolumes []model.UnusedVolume, expiringReservations []model.Reservation, stoppedInstances []model.StoppedInstance) {
+	fmt.Printf("\n%s\n", text.FgHiWhite.Sprint(" 🏥 CLOUD DOCTOR CHECKUP"))
 	fmt.Printf(" Account ID: %s\n", text.FgBlue.Sprint(accountId))
 	fmt.Println(text.FgHiBlue.Sprint(" ------------------------------------------------"))
 
-	hasWaste := len(elasticIpInfo) > 0 ||
-		len(unusedEBSVolumeInfo) > 0 ||
-		len(attachedToStoppedInstancesEBSVolumeInfo) > 0 ||
-		len(instancesStoppedMoreThan30Days) > 0 ||
-		len(expireReservedInstancesInfo) > 0
+	hasWaste := len(unusedIPs) > 0 ||
+		len(unusedVolumes) > 0 ||
+		len(attachedToStoppedVolumes) > 0 ||
+		len(stoppedInstances) > 0 ||
+		len(expiringReservations) > 0
 
 	if !hasWaste {
 		fmt.Println("\n" + text.FgHiGreen.Sprint(" ✅  Your account is healthy! No waste found."))
 		return
 	}
 
-	// --- Existing Logic ---
-	if len(unusedEBSVolumeInfo) > 0 || len(attachedToStoppedInstancesEBSVolumeInfo) > 0 {
-		drawEBSTable(unusedEBSVolumeInfo, attachedToStoppedInstancesEBSVolumeInfo)
+	if len(unusedVolumes) > 0 || len(attachedToStoppedVolumes) > 0 {
+		drawVolumeTable(unusedVolumes, attachedToStoppedVolumes)
 	}
 
-	if len(elasticIpInfo) > 0 {
-		drawElasticIpTable(elasticIpInfo)
+	if len(unusedIPs) > 0 {
+		drawIPTable(unusedIPs)
 	}
 
-	if len(instancesStoppedMoreThan30Days) > 0 || len(expireReservedInstancesInfo) > 0 {
-		drawEC2Table(instancesStoppedMoreThan30Days, expireReservedInstancesInfo)
+	if len(stoppedInstances) > 0 || len(expiringReservations) > 0 {
+		drawInstanceTable(stoppedInstances, expiringReservations)
 	}
 }
 
-func drawEBSTable(unusedEBSVolumeInfo []types.Volume, attachedToStoppedInstancesEBSVolumeInfo []types.Volume) {
+func drawVolumeTable(unusedVolumes []model.UnusedVolume, attachedToStoppedVolumes []model.UnusedVolume) {
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetStyle(table.StyleRounded)
-	t.SetTitle("EBS Volume Waste")
+	t.SetTitle("Volume Waste")
 
 	t.AppendHeader(table.Row{"Status", "Volume ID", "Size (GiB)"})
 
@@ -57,24 +54,28 @@ func drawEBSTable(unusedEBSVolumeInfo []types.Volume, attachedToStoppedInstances
 	})
 
 	statusAvailable := "Available (Unattached)"
-	rows := populateEBSRows(unusedEBSVolumeInfo)
+	rows := populateVolumeRows(unusedVolumes)
 
-	halfRow := len(rows) / 2
-	rows[halfRow][0] = text.FgHiRed.Sprint(statusAvailable)
+	if len(rows) > 0 {
+		halfRow := len(rows) / 2
+		rows[halfRow][0] = text.FgHiRed.Sprint(statusAvailable)
+	}
 
 	t.AppendRows(rows)
 
 	rows = []table.Row{}
 
-	if len(unusedEBSVolumeInfo) > 0 && len(attachedToStoppedInstancesEBSVolumeInfo) > 0 {
+	if len(unusedVolumes) > 0 && len(attachedToStoppedVolumes) > 0 {
 		t.AppendSeparator()
 	}
 
 	statusStopped := "Attached to Stopped Instance"
-	rows = populateEBSRows(attachedToStoppedInstancesEBSVolumeInfo)
+	rows = populateVolumeRows(attachedToStoppedVolumes)
 
-	halfRow = len(rows) / 2
-	rows[halfRow][0] = text.FgHiRed.Sprint(statusStopped)
+	if len(rows) > 0 {
+		halfRow := len(rows) / 2
+		rows[halfRow][0] = text.FgHiRed.Sprint(statusStopped)
+	}
 
 	t.AppendRows(rows)
 
@@ -84,11 +85,11 @@ func drawEBSTable(unusedEBSVolumeInfo []types.Volume, attachedToStoppedInstances
 	}
 }
 
-func drawEC2Table(instances []types.Instance, ris []model.RiExpirationInfo) {
+func drawInstanceTable(instances []model.StoppedInstance, reservations []model.Reservation) {
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetStyle(table.StyleRounded)
-	t.SetTitle("EC2 & Reserved Instance Waste")
+	t.SetTitle("Instance & Reserved Instance Waste")
 
 	t.AppendHeader(table.Row{"Status", "Instance ID", "Time Info"})
 
@@ -100,9 +101,8 @@ func drawEC2Table(instances []types.Instance, ris []model.RiExpirationInfo) {
 
 	if len(instances) > 0 {
 		statusLabel := "Stopped Instance(> 30 Days)"
-		rows := populateInstanceRows(instances)
+		rows := populateStoppedInstanceRows(instances)
 
-		// Apply grouped status label
 		halfRow := len(rows) / 2
 		rows[halfRow][0] = text.FgHiRed.Sprint(statusLabel)
 
@@ -110,25 +110,22 @@ func drawEC2Table(instances []types.Instance, ris []model.RiExpirationInfo) {
 		hasPreviousRows = true
 	}
 
-	// --- SECTION 2 & 3: Reserved Instances ---
-	if len(ris) > 0 {
-		// We split RIs into two groups for better status labeling
-		var expiring, expired []model.RiExpirationInfo
-		for _, ri := range ris {
-			if ri.Status == "EXPIRING SOON" {
-				expiring = append(expiring, ri)
+	if len(reservations) > 0 {
+		var expiring, expired []model.Reservation
+		for _, r := range reservations {
+			if r.Status == "expiring" {
+				expiring = append(expiring, r)
 			} else {
-				expired = append(expired, ri)
+				expired = append(expired, r)
 			}
 		}
 
-		// Group: Expiring Soon
 		if len(expiring) > 0 {
 			if hasPreviousRows {
 				t.AppendSeparator()
 			}
 			statusLabel := "Reserved Instance\n(Expiring Soon)"
-			rows := populateRiRows(expiring)
+			rows := populateReservationRows(expiring)
 
 			halfRow := len(rows) / 2
 			rows[halfRow][0] = text.FgHiYellow.Sprint(statusLabel)
@@ -137,13 +134,12 @@ func drawEC2Table(instances []types.Instance, ris []model.RiExpirationInfo) {
 			hasPreviousRows = true
 		}
 
-		// Group: Recently Expired
 		if len(expired) > 0 {
 			if hasPreviousRows {
 				t.AppendSeparator()
 			}
 			statusLabel := "Reserved Instance\n(Recently Expired)"
-			rows := populateRiRows(expired)
+			rows := populateReservationRows(expired)
 
 			halfRow := len(rows) / 2
 			rows[halfRow][0] = text.FgHiRed.Sprint(statusLabel)
@@ -156,16 +152,16 @@ func drawEC2Table(instances []types.Instance, ris []model.RiExpirationInfo) {
 	fmt.Println()
 }
 
-func drawElasticIpTable(elasticIpInfo []types.Address) {
+func drawIPTable(unusedIPs []model.UnusedIP) {
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetStyle(table.StyleRounded)
-	t.SetTitle("Elastic IP Waste")
+	t.SetTitle("IP Address Waste")
 
 	t.AppendHeader(table.Row{"Status", "IP Address", "Allocation ID"})
 
 	statusUnused := "Unassociated"
-	rows := populateElasticIpRows(elasticIpInfo)
+	rows := populateIPRows(unusedIPs)
 
 	if len(rows) > 0 {
 		halfRow := len(rows) / 2
@@ -177,89 +173,62 @@ func drawElasticIpTable(elasticIpInfo []types.Address) {
 	fmt.Println()
 }
 
-func populateEBSRows(volumes []types.Volume) []table.Row {
+func populateVolumeRows(volumes []model.UnusedVolume) []table.Row {
 	var rows []table.Row
 
 	for _, vol := range volumes {
 		rows = append(rows, table.Row{
 			"",
-			*vol.VolumeId,
-			fmt.Sprintf("%d GiB", *vol.Size),
+			vol.ID,
+			fmt.Sprintf("%d GiB", vol.SizeGB),
 		})
 	}
 
 	return rows
 }
 
-func populateElasticIpRows(ips []types.Address) []table.Row {
+func populateIPRows(ips []model.UnusedIP) []table.Row {
 	var rows []table.Row
 
 	for _, ip := range ips {
-		publicIp := ""
-		if ip.PublicIp != nil {
-			publicIp = *ip.PublicIp
-		}
-
-		allocationId := ""
-		if ip.AllocationId != nil {
-			allocationId = *ip.AllocationId
-		}
-
 		rows = append(rows, table.Row{
 			"",
-			publicIp,
-			allocationId,
+			ip.Address,
+			ip.AllocationID,
 		})
 	}
 
 	return rows
 }
 
-func populateInstanceRows(instances []types.Instance) []table.Row {
+func populateStoppedInstanceRows(instances []model.StoppedInstance) []table.Row {
 	var rows []table.Row
-	now := time.Now()
 
 	for _, instance := range instances {
-		// Parse date for display
-		reason := ""
-		if instance.StateTransitionReason != nil {
-			reason = *instance.StateTransitionReason
-		}
-
-		timeInfo := "-"
-		stoppedAt, err := ParseTransitionDate(reason)
-		if err == nil {
-			days := int(now.Sub(stoppedAt).Hours() / 24)
-			timeInfo = fmt.Sprintf("%d days ago", days)
-		}
-
-		instanceId := ""
-		if instance.InstanceId != nil {
-			instanceId = *instance.InstanceId
-		}
+		timeInfo := fmt.Sprintf("%d days ago", instance.StoppedDays)
 
 		rows = append(rows, table.Row{
-			"", // Placeholder for Status
-			instanceId,
+			"",
+			instance.ID,
 			timeInfo,
 		})
 	}
 	return rows
 }
 
-func populateRiRows(ris []model.RiExpirationInfo) []table.Row {
+func populateReservationRows(reservations []model.Reservation) []table.Row {
 	var rows []table.Row
-	for _, ri := range ris {
+	for _, r := range reservations {
 		timeInfo := ""
-		if ri.DaysUntilExpiry >= 0 {
-			timeInfo = fmt.Sprintf("In %d days", ri.DaysUntilExpiry)
+		if r.DaysUntilExpiry >= 0 {
+			timeInfo = fmt.Sprintf("In %d days", r.DaysUntilExpiry)
 		} else {
-			timeInfo = fmt.Sprintf("%d days ago", -ri.DaysUntilExpiry)
+			timeInfo = fmt.Sprintf("%d days ago", -r.DaysUntilExpiry)
 		}
 
 		rows = append(rows, table.Row{
 			"",
-			ri.ReservedInstanceId,
+			r.ID,
 			timeInfo,
 		})
 	}

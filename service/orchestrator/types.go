@@ -2,15 +2,13 @@ package orchestrator
 
 import (
 	"github.com/elC0mpa/aws-doctor/model"
-	awscostexplorer "github.com/elC0mpa/aws-doctor/service/costexplorer"
-	awsec2 "github.com/elC0mpa/aws-doctor/service/ec2"
-	awssts "github.com/elC0mpa/aws-doctor/service/sts"
+	"github.com/elC0mpa/aws-doctor/service"
 )
 
-type service struct {
-	stsService  awssts.STSService
-	costService awscostexplorer.CostService
-	ec2Service  awsec2.EC2Service
+type orchestratorService struct {
+	identityService service.IdentityService
+	costService     service.CostService
+	resourceService service.ResourceService
 }
 
 type OrchestratorService interface {
