@@ -71,30 +71,59 @@ func (s *service) getMonthCostsByService(ctx context.Context, endDate time.Time)
 
 	costGroups := make(model.CostGroup)
 
-	// Parse the response
-	if resp.Properties != nil && resp.Properties.Rows != nil {
-		for _, row := range resp.Properties.Rows {
-			if len(row) >= 2 {
-				// Row format: [cost, serviceName, ...]
-				cost, ok := row[0].(float64)
-				if !ok {
-					continue
-				}
-				serviceName, ok := row[1].(string)
-				if !ok {
-					continue
-				}
+	// Find column indices from response metadata
+	costIdx := -1
+	serviceIdx := -1
+	currencyIdx := -1
 
-				if cost > 0 {
-					// Aggregate costs by service (since we're querying daily granularity)
-					existing := costGroups[serviceName]
-					costGroups[serviceName] = struct {
-						Amount float64
-						Unit   string
-					}{
-						Amount: existing.Amount + cost,
-						Unit:   "USD", // Azure Cost Management returns costs in USD by default
-					}
+	if resp.Properties != nil && resp.Properties.Columns != nil {
+		for i, col := range resp.Properties.Columns {
+			if col.Name != nil {
+				switch *col.Name {
+				case "Cost", "PreTaxCost":
+					costIdx = i
+				case "ServiceName":
+					serviceIdx = i
+				case "Currency":
+					currencyIdx = i
+				}
+			}
+		}
+	}
+
+	// Parse the response using dynamic column indices
+	if resp.Properties != nil && resp.Properties.Rows != nil && costIdx >= 0 && serviceIdx >= 0 {
+		for _, row := range resp.Properties.Rows {
+			if len(row) <= costIdx || len(row) <= serviceIdx {
+				continue
+			}
+
+			cost, ok := row[costIdx].(float64)
+			if !ok {
+				continue
+			}
+			serviceName, ok := row[serviceIdx].(string)
+			if !ok {
+				continue
+			}
+
+			// Get currency from row if available, default to USD
+			currency := "USD"
+			if currencyIdx >= 0 && len(row) > currencyIdx {
+				if curr, ok := row[currencyIdx].(string); ok {
+					currency = curr
+				}
+			}
+
+			if cost > 0 {
+				// Aggregate costs by service (since we're querying daily granularity)
+				existing := costGroups[serviceName]
+				costGroups[serviceName] = struct {
+					Amount float64
+					Unit   string
+				}{
+					Amount: existing.Amount + cost,
+					Unit:   currency,
 				}
 			}
 		}

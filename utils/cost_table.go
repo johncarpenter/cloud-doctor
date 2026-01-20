@@ -35,10 +35,11 @@ func DrawCostTable(accountId string, lastTotalCost, currenttotalCost string, las
 
 	rows = append(rows, populateFirstRow(lastTotalCost, currenttotalCost))
 
-	orderedServicesCosts := orderCostServices(&currentMonthGroups.CostGroup)
+	// Merge services from both months to show complete picture
+	mergedServicesCosts := mergeCostServices(&lastMonthGroups.CostGroup, &currentMonthGroups.CostGroup)
 
-	for _, group := range orderedServicesCosts {
-		rows = append(rows, populateRow(*lastMonthGroups, group))
+	for _, currentMonthService := range mergedServicesCosts {
+		rows = append(rows, populateRowWithBothMonths(*lastMonthGroups, *currentMonthGroups, currentMonthService.Name))
 	}
 
 	tw.AppendRows(rows)
@@ -78,6 +79,68 @@ func orderCostServices(costGroups *model.CostGroup) []model.ServiceCost {
 
 	sort.Slice(sortedServices, func(i, j int) bool {
 		return sortedServices[i].Amount > sortedServices[j].Amount
+	})
+
+	return sortedServices
+}
+
+// mergeCostServices combines services from both months, sorting by max cost across either month
+func mergeCostServices(lastMonthGroups, currentMonthGroups *model.CostGroup) []model.ServiceCost {
+	// Use a map to collect unique service names
+	serviceMap := make(map[string]model.ServiceCost)
+
+	// Add all services from current month
+	for key, group := range *currentMonthGroups {
+		serviceMap[key] = model.ServiceCost{
+			Name:   key,
+			Amount: group.Amount,
+			Unit:   group.Unit,
+		}
+	}
+
+	// Add services from last month that aren't already in the map
+	// or update the unit if current month didn't have this service
+	for key, group := range *lastMonthGroups {
+		if existing, exists := serviceMap[key]; exists {
+			// Service exists in both months, keep current month's data
+			// but ensure we have a unit (in case current month amount is 0)
+			if existing.Unit == "" && group.Unit != "" {
+				existing.Unit = group.Unit
+				serviceMap[key] = existing
+			}
+		} else {
+			// Service only exists in last month
+			serviceMap[key] = model.ServiceCost{
+				Name:   key,
+				Amount: 0, // Current month amount is 0
+				Unit:   group.Unit,
+			}
+		}
+	}
+
+	// Convert map to slice
+	sortedServices := make([]model.ServiceCost, 0, len(serviceMap))
+	for _, service := range serviceMap {
+		sortedServices = append(sortedServices, service)
+	}
+
+	// Sort by max cost across both months (descending)
+	sort.Slice(sortedServices, func(i, j int) bool {
+		// Get last month costs for comparison
+		lastI := (*lastMonthGroups)[sortedServices[i].Name].Amount
+		lastJ := (*lastMonthGroups)[sortedServices[j].Name].Amount
+
+		// Use max of current and last month for sorting
+		maxI := sortedServices[i].Amount
+		if lastI > maxI {
+			maxI = lastI
+		}
+		maxJ := sortedServices[j].Amount
+		if lastJ > maxJ {
+			maxJ = lastJ
+		}
+
+		return maxI > maxJ
 	})
 
 	return sortedServices
@@ -134,6 +197,37 @@ func populateRow(lastMonthGroups model.CostInfo, currentMonthGroup model.Service
 		row[0] = text.FgRed.Sprintf("%s", serviceName)
 		row[2] = text.FgRed.Sprintf("%s", currentServiceCost)
 		row[3] = text.FgRed.Sprintf("%.2f %s", difference, currentMonthGroup.Unit)
+	}
+
+	return row
+}
+
+func populateRowWithBothMonths(lastMonthGroups, currentMonthGroups model.CostInfo, serviceName string) table.Row {
+	row := make(table.Row, 4)
+
+	lastMonthGroup := lastMonthGroups.CostGroup[serviceName]
+	currentMonthGroup := currentMonthGroups.CostGroup[serviceName]
+
+	// Determine the unit to use (prefer current month, fallback to last month)
+	unit := currentMonthGroup.Unit
+	if unit == "" {
+		unit = lastMonthGroup.Unit
+	}
+
+	currentServiceCost := fmt.Sprintf("%.2f %s", currentMonthGroup.Amount, unit)
+	lastServiceCost := fmt.Sprintf("%.2f %s", lastMonthGroup.Amount, unit)
+
+	difference := currentMonthGroup.Amount - lastMonthGroup.Amount
+
+	row[0] = text.FgGreen.Sprintf("%s", serviceName)
+	row[1] = text.FgYellow.Sprintf("%s", lastServiceCost)
+	row[2] = text.FgGreen.Sprintf("%s", currentServiceCost)
+	row[3] = text.FgGreen.Sprintf("%.2f %s", difference, unit)
+
+	if difference > 0 {
+		row[0] = text.FgRed.Sprintf("%s", serviceName)
+		row[2] = text.FgRed.Sprintf("%s", currentServiceCost)
+		row[3] = text.FgRed.Sprintf("%.2f %s", difference, unit)
 	}
 
 	return row
