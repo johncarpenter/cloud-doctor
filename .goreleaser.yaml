@@ -1,0 +1,110 @@
+version: 2
+
+project_name: cloud-doctor
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  # CLI binary
+  - id: cloud-doctor
+    main: .
+    binary: cloud-doctor
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+  # MCP server binary
+  - id: cloud-doctor-mcp
+    main: ./cmd/mcp
+    binary: cloud-doctor-mcp
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: cloud-doctor-archive
+    builds:
+      - cloud-doctor
+    name_template: "cloud-doctor_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+  - id: cloud-doctor-mcp-archive
+    builds:
+      - cloud-doctor-mcp
+    name_template: "cloud-doctor-mcp_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: johncarpenter
+    name: cloud-doctor
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
+  header: |
+    ## Cloud Doctor v{{.Version}}
+
+    Multi-cloud cost analysis and waste detection for AWS, GCP, and Azure.
+
+    ### Installation
+
+    Download the appropriate binary for your platform below, or install via Go:
+
+    ```bash
+    go install github.com/johncarpenter/cloud-doctor@v{{.Version}}
+    ```
+
+    ### Binaries
+
+    - **cloud-doctor** - CLI tool with terminal UI
+    - **cloud-doctor-mcp** - MCP server for AI assistant integration

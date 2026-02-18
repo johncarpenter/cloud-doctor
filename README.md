@@ -41,18 +41,37 @@ go build -o cloud-doctor
 
 ## Installation
 
-### From Source
+### Download Binary (Recommended)
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/johncarpenter/cloud-doctor/releases):
+
+| Platform | CLI | MCP Server |
+|----------|-----|------------|
+| macOS (Apple Silicon) | `cloud-doctor_*_darwin_arm64.tar.gz` | `cloud-doctor-mcp_*_darwin_arm64.tar.gz` |
+| macOS (Intel) | `cloud-doctor_*_darwin_amd64.tar.gz` | `cloud-doctor-mcp_*_darwin_amd64.tar.gz` |
+| Linux (x86_64) | `cloud-doctor_*_linux_amd64.tar.gz` | `cloud-doctor-mcp_*_linux_amd64.tar.gz` |
+| Linux (ARM64) | `cloud-doctor_*_linux_arm64.tar.gz` | `cloud-doctor-mcp_*_linux_arm64.tar.gz` |
+| Windows | `cloud-doctor_*_windows_amd64.zip` | `cloud-doctor-mcp_*_windows_amd64.zip` |
 
 ```bash
-git clone https://github.com/johncarpenter/cloud-doctor.git
-cd cloud-doctor
-go build -o cloud-doctor
+# Example: macOS Apple Silicon
+curl -L https://github.com/johncarpenter/cloud-doctor/releases/latest/download/cloud-doctor_darwin_arm64.tar.gz | tar xz
+sudo mv cloud-doctor /usr/local/bin/
 ```
 
 ### Go Install
 
 ```bash
 go install github.com/johncarpenter/cloud-doctor@latest
+```
+
+### From Source
+
+```bash
+git clone https://github.com/johncarpenter/cloud-doctor.git
+cd cloud-doctor
+go build -o cloud-doctor
+go build -o cloud-doctor-mcp ./cmd/mcp
 ```
 
 ## Command Line Flags
@@ -206,6 +225,60 @@ Uses DefaultAzureCredential:
 +-----------+------------------+----------------+------------+-------------------+--------------+--------------+
 ```
 
+## MCP Server
+
+Cloud Doctor can also run as an MCP (Model Context Protocol) server, allowing AI assistants like Claude to query cloud costs and waste detection directly.
+
+### Building the MCP Server
+
+```bash
+go build -o cloud-doctor-mcp ./cmd/mcp
+```
+
+### Configuration
+
+Configure via environment variables:
+
+| Variable | Provider | Required | Description |
+|----------|----------|----------|-------------|
+| `AWS_REGION` | AWS | No | AWS region (default: `us-east-1`) |
+| `AWS_PROFILE` | AWS | No | AWS credential profile |
+| `GCP_PROJECT_ID` | GCP | Yes* | GCP project ID |
+| `GCP_BILLING_ACCOUNT` | GCP | Yes* | GCP billing account ID |
+| `AZURE_SUBSCRIPTION_ID` | Azure | Yes* | Azure subscription UUID |
+
+*Required only when using that provider's tools
+
+### Claude Desktop Configuration
+
+Add to your `~/.claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "cloud-doctor": {
+      "command": "/path/to/cloud-doctor-mcp",
+      "env": {
+        "AWS_REGION": "us-east-1",
+        "GCP_PROJECT_ID": "my-project-id",
+        "GCP_BILLING_ACCOUNT": "billingAccounts/XXXXXX-XXXXXX-XXXXXX",
+        "AZURE_SUBSCRIPTION_ID": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+**AWS Tools (9):** `aws_get_account_info`, `aws_get_current_month_costs`, `aws_get_cost_comparison`, `aws_get_cost_trend`, `aws_get_unused_volumes`, `aws_get_unused_ips`, `aws_get_stopped_instances`, `aws_get_expiring_reservations`, `aws_get_waste_summary`
+
+**GCP Tools (9):** `gcp_get_project_info`, `gcp_get_current_month_costs`, `gcp_get_cost_comparison`, `gcp_get_cost_trend`, `gcp_get_unused_volumes`, `gcp_get_unused_ips`, `gcp_get_stopped_instances`, `gcp_get_expiring_reservations`, `gcp_get_waste_summary`
+
+**Azure Tools (10):** `azure_list_subscriptions`, `azure_get_subscription_info`, `azure_get_current_month_costs`, `azure_get_cost_comparison`, `azure_get_cost_trend`, `azure_get_unused_volumes`, `azure_get_unused_ips`, `azure_get_stopped_instances`, `azure_get_expiring_reservations`, `azure_get_waste_summary`
+
+**Multi-Cloud Tools (2):** `multicloud_get_cost_summary`, `multicloud_get_waste_summary`
+
 ## Roadmap
 
 - [x] AWS cost comparison and trend analysis
@@ -215,6 +288,7 @@ Uses DefaultAzureCredential:
 - [x] Azure cost comparison and trend analysis
 - [x] Azure waste detection
 - [x] Multi-cloud unified view
+- [x] MCP server for AI assistant integration
 - [ ] Export reports to CSV and PDF formats
 - [ ] Slack/Teams webhook notifications
 - [ ] Cost anomaly alerts with thresholds
