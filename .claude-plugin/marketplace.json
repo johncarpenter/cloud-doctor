@@ -1,0 +1,18 @@
+{
+    "name": "cloud-doctor",
+    "owner": {
+        "name": "John Carpenter",
+        "email": "john@2linessoftware.com"
+    },
+    "plugins": [
+        {
+            "name": "cloud-doctor",
+            "source": "./plugins/cloud-doctor",
+            "description": "Hyperscaler FinOps and cloud cost management",
+            "version": "1.0.0",
+            "author": {
+                "name": "John Carpenter"
+            }
+        }
+    ]
+}

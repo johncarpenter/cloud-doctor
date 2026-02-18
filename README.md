@@ -279,6 +279,138 @@ Add to your `~/.claude/claude_desktop_config.json`:
 
 **Multi-Cloud Tools (2):** `multicloud_get_cost_summary`, `multicloud_get_waste_summary`
 
+### Local MCP Installation
+
+1. **Build the MCP server:**
+   ```bash
+   git clone https://github.com/johncarpenter/cloud-doctor.git
+   cd cloud-doctor
+   go build -o cloud-doctor-mcp ./cmd/mcp
+   ```
+
+2. **Move to a permanent location:**
+   ```bash
+   sudo mv cloud-doctor-mcp /usr/local/bin/
+   # Or keep it in your home directory
+   mkdir -p ~/.local/bin && mv cloud-doctor-mcp ~/.local/bin/
+   ```
+
+3. **Configure for Claude Desktop:**
+
+   Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+   ```json
+   {
+     "mcpServers": {
+       "cloud-doctor": {
+         "command": "/usr/local/bin/cloud-doctor-mcp",
+         "env": {
+           "AWS_REGION": "us-east-1",
+           "AWS_PROFILE": "default",
+           "GCP_PROJECT_ID": "my-project-id",
+           "GCP_BILLING_ACCOUNT": "billingAccounts/XXXXXX-XXXXXX-XXXXXX",
+           "AZURE_SUBSCRIPTION_ID": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+         }
+       }
+     }
+   }
+   ```
+
+4. **Configure for Claude Code CLI:**
+
+   Edit `~/.claude/settings.json`:
+
+   ```json
+   {
+     "mcpServers": {
+       "cloud-doctor": {
+         "command": "/usr/local/bin/cloud-doctor-mcp",
+         "env": {
+           "AWS_REGION": "us-east-1",
+           "AZURE_SUBSCRIPTION_ID": "your-subscription-id"
+         }
+       }
+     }
+   }
+   ```
+
+5. **Verify installation:**
+
+   Restart Claude Desktop or Claude Code, then ask: "What AWS tools are available?"
+
+## Claude Code Plugin
+
+Cloud Doctor is also available as a Claude Code plugin, providing slash commands for quick cost analysis directly in your terminal.
+
+### Installing the Plugin
+
+1. **Add the marketplace:**
+   ```bash
+   # From GitHub (when published)
+   /plugin marketplace add johncarpenter/cloud-doctor
+
+   # Or from a local clone
+   /plugin marketplace add /path/to/cloud-doctor
+   ```
+
+2. **Install the plugin:**
+   ```bash
+   /plugin install cloud-doctor@cloud-doctor
+   ```
+
+3. **Verify installation:**
+   ```bash
+   /plugin list
+   ```
+
+### Available Skills
+
+| Command | Description |
+|---------|-------------|
+| `/aws` | AWS cost summary - MTD vs previous month by service |
+| `/azure` | Azure cost summary - MTD vs previous month by service |
+| `/gcp` | GCP cost summary - MTD vs previous month by service |
+| `/multicloud` | Unified cost summary across all configured providers |
+
+### Usage Examples
+
+```bash
+# Check AWS costs
+/aws
+
+# Check Azure costs (requires az login)
+/azure
+
+# Check all configured cloud providers
+/multicloud
+```
+
+### Prerequisites
+
+Each skill checks for the required CLI authentication before querying:
+
+| Provider | Requirement | Setup Command |
+|----------|-------------|---------------|
+| AWS | AWS CLI configured | `aws configure` or `aws sso login` |
+| Azure | Azure CLI logged in | `az login` |
+| GCP | gcloud CLI configured | `gcloud auth login` + BigQuery billing export |
+
+### Sample Output
+
+```
+## AWS Cost Summary (Feb 1-18, 2026)
+
+| Service | MTD Cost | Last Month | Change | % Change |
+|---------|----------|------------|--------|----------|
+| Amazon EC2 | $1,234.56 | $1,456.78 | -$222.22 | -15% |
+| Amazon RDS | $567.89 | $543.21 | +$24.68 | +5% |
+| Amazon S3 | $123.45 | $98.76 | +$24.69 | +25% |
+| AWS Lambda | $45.67 | $52.34 | -$6.67 | -13% |
+| **Total** | **$1,971.57** | **$2,151.09** | **-$179.52** | **-8%** |
+
+Note: MTD costs are partial (18 of 28 days). Last month shows full month.
+```
+
 ## Roadmap
 
 - [x] AWS cost comparison and trend analysis
